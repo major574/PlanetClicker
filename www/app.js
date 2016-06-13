@@ -1,40 +1,88 @@
 var game = new Phaser.Game(352, 640, Phaser.CANVAS, 'phaser-example', { preload: preload, create: create, update: update });
 
-function preload() {
-    game.load.tilemap('planet', 'app/assets/planetSand.json', null, Phaser.Tilemap.TILED_JSON);
-    game.load.image('tiles', 'app/assets/Bones_A.png');
-    game.load.image('button1', 'app/assets/mine-button.png');
-    game.load.image('button2', 'app/assets/solar-button.png')
-    game.load.image('mine', 'app/assets/mine.png');
-    game.load.image('solar', 'app/assets/solarpanel.png');
-    game.load.image('footer', 'app/assets/footerbox.png');
-    game.load.image('header', 'app/assets/headerbox.png');
-}
-
 var map;
+var music;
+var buttonSound;
+var placeSound;
 var layer;
 var layer2;
 var marker;
 var reservedArea = [];
 var buildingCount = 0;
 var buildingText;
-var mineText;
-var solarText;
-var oreText;
-var energyText;
-var mineBool = false;
-var solarBool = false;
-var mineResources = 10;
-var solarResources = 0;
-var mineCount = 0;
-var solarCount = 0;
 var footerUI;
 var headerUI;
+
+var selected = null;
+var justBuilt = true;
+
+var resources = {
+    matter: 10,
+    energy: 0
+}
+
+var buildings = [
+    {
+        name: 'solar',
+        image: 'app/assets/solarpanel.png',
+        matterCost: 20,
+        energyCost: 0,
+        matterMake: 0,
+        energyMake: 1,
+        count: 0,
+        handicap: 4,
+        text: { x: 10,  y: 24, text: 'Solar Panels', font: { font: '10px Monaco', fill: '#32ff14' } },
+        textobject: undefined,
+        button: { x: 115, y: 592, image: 'app/assets/solar-button.png', spritename: 'button2', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
+    {
+        name:  'mine',
+        image: 'app/assets/mine.png',
+        matterCost: 10,
+        energyCost: 0,
+        matterMake: 1,
+        energyMake: 0,
+        count: 0,
+        handicap: 1,
+        text: { x: 10,  y: 40, text: 'Mines', font: { font: '10px Monaco', fill: '#32ff14' } },
+        textobject: undefined,
+        button: { x: 45, y: 592, image: 'app/assets/mine-button.png', spritename: 'button1', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
+]
+
+function preload() {
+    game.load.tilemap('planet', 'app/assets/planetSand.json', null, Phaser.Tilemap.TILED_JSON);
+
+    game.load.image('tiles', 'app/assets/Bones_A.png');
+    game.load.image('footer', 'app/assets/footerbox.png');
+    game.load.image('header', 'app/assets/headerbox.png');
+
+    game.load.audio('ambience', 'app/assets/GalacticTemple.ogg');
+    game.load.audio('clickSfx', 'app/assets/buttonclick.mp3');
+    game.load.audio('placeSfx', 'app/assets/placeclick.mp3');
+
+    for(var i = 0; i < buildings.length; ++i) {
+        game.load.image( buildings[i].name, buildings[i].image )
+        game.load.image( buildings[i].button.spritename, buildings[i].button.image )
+    }
+}
+
 
 function create() {
     //Map tileset
     map = game.add.tilemap('planet');
     map.addTilesetImage('Bones_A', 'tiles');
+
+    music = game.add.audio('ambience');
+    buttonSound = game.add.audio('clickSfx');
+    placeSound = game.add.audio('placeSfx');
+    music.play();
 
     //Add ground layer
     layer = map.createLayer('Tile Layer 1');
@@ -53,116 +101,111 @@ function create() {
     footerUI.anchor.setTo(0.5, 0.5);
     headerUI = game.add.sprite(176, 48, 'header');
     headerUI.anchor.setTo(0.5, 0.5);
-    
+
     //Text labels
-    buildingText = game.add.text(12, 8, "Total Buildings: " + 0, {font: "12px Ariel", fill: '#32ff14' });
-    solarText = game.add.text(12, 24, "Solar Panels: " + 0, {font: "12px Ariel", fill: '#32ff14' });
-    mineText = game.add.text(12, 40, "Mines: " + 0, {font: "12px Ariel", fill: '#32ff14' });
-    oreText = game.add.text(12, 56, "Metal Ore: " + 10, {font: "12px Ariel", fill: "#32ff14" });
-    energyText = game.add.text(12, 72, "Energy: " + 0, {font: "12px Ariel", fill: "#32ff14" });
-
-    //Draw Mine button, enable mouse input and listener
-    mineButton = game.add.sprite(45, 592, 'button1');
-    mineButton.anchor.setTo(0.5, 0.5);
-    mineButton.inputEnabled = true;
-    mineButton.events.onInputDown.add(mineListener, this);
-
-    //Draw Solar Panel button, enable mouse input and listener
-    solarButton = game.add.sprite(115, 592, 'button2');
-    solarButton.anchor.setTo(0.5, 0.5);
-    solarButton.inputEnabled = true;
-    solarButton.events.onInputDown.add(solarListener, this);
-
-    //Load mine sprite
-    mineBuild = game.make.sprite(0,0, 'mine');
-    mineBuild.anchor.set(0.5);
-
-    //Load solar panel sprite
-    solarBuild = game.make.sprite(0,0, 'solar');
-    solarBuild.anchor.set(0.5);
+    buildingText = game.add.text(10, 8, "Total Buildings: " + 0, {font: "10px Monaco", fill: '#32ff14' });
+    matterText = game.add.text(10, 56, "Matter: " + resources.matter, {font: "10px Monaco", fill: "#32ff14" });
+    energyText = game.add.text(10, 72, "Energy: " + resources.energy, {font: "10px Monaco", fill: "#32ff14" });
 
     //Add bitmapdata and bounds
     bmd = game.add.bitmapData(352, 640);
     bmd.addToWorld();
     bmd.smoothed = false;
 
+    for(var i = 0; i < buildings.length; ++i) {
+        
+        var t = buildings[i].text;
+        var b = buildings[i].button;
+
+        buildings[i].textobject = game.add.text(t.x, t.y, t.text + ': ' + buildings[i].count, t.font );
+
+        b.buttonref = game.add.sprite( b.x, b.y, b.spritename );
+        b.buttonref.anchor.setTo(0.5, 0.5);
+        b.buttonref.inputEnabled = true;
+
+        buildings[i].build = game.make.sprite(0,0, buildings[i].name);
+        buildings[i].build.anchor.set(0.5);
+
+        b.buttonref.events.onInputDown.add( listener, i );
+    }
+
+    game.input.addMoveCallback(movehandler, this);
+
     //Game clock
     game.time.events.loop(Phaser.Timer.SECOND, updateTimers, this);
 }
 
-function mineListener () {
-    if(mineBool === false){
-        mineBool = true;
-        console.log("mine " + mineBool);
-        game.input.addMoveCallback(mineHandler, this);
+function listener() {
+    selected = this;
+    buttonSound.play();
+    justBuilt = false;
+
+}
+
+function movehandler( pointer, x, y ) {
+
+    if( pointer.isDown &&
+        justBuilt == false &&
+        x < 256 &&
+        x > 96 &&
+        y < 528 &&
+        y > 112 ) {
+        placeBuilding(selected);
     }
 }
 
-function solarListener () {
-    if(solarBool === false){
-        solarBool = true;
-        console.log("solar " + solarBool);
-        game.input.addMoveCallback(solarHandler, this);
-    }
-}
+function placeBuilding(index) {
+    var building = buildings[index];
 
-function mineHandler (pointer, x, y) {
-    y = marker.y + 16;
-    x = marker.x + 16;
-    if(mineBool === true && pointer.isDown && mineResources >= 10 && x < 256 && x > 96 && y < 528 && y > 112) {
+    if( resources.matter >= building.matterCost &&
+        resources.energy >= building.energyCost ) {
+
+        var y = marker.y + 16;
+        var x = marker.x + 16;
+
         console.log(x, y);
         var temp = "" + x + y;
-        var i = 0
-        while(i < reservedArea.length){
-            console.log(i)
-            if(reservedArea[i] !== temp){
-                i++;
-            }else if(reservedArea[i] === temp){
+        var j = 0;
+
+        while(j < reservedArea.length){
+            console.log(j)
+            if(reservedArea[j] !== temp){
+                j++;
+            }else if(reservedArea[j] === temp){
                 console.log("There is already a building there");
                 return;
             }
         }
         reservedArea.push(temp);
         console.log(reservedArea);
-        mineCount++
-        handleCounters();
-        mineResources-=10;
-        mineText.text = "Mines: " + mineCount;
-        bmd.draw(mineBuild, x, y)
+        building.count++;
+
+        buildingCount++;
+        buildingText.text = "Total Buildings: " + buildingCount;
+        building.selected = false;
+
+        resources.matter -= building.matterCost;
+        resources.energy -= building.energyCost;
+
+        building.textobject.text = building.text.text + ': ' + building.count;
+        bmd.draw(building.build, x, y);
+        justBuilt = true;
+        placeSound.play();
+
     }
+
 }
 
-function solarHandler (pointer, x, y) {
-    y = marker.y + 16;
-    x = marker.x + 16;
-    if(solarBool === true && pointer.isDown && mineResources >= 20 && x < 256 && x > 64 && y < 580 && y > 100) {
-        console.log(x, y);
-        var temp = "" + x + y;
-        var i = 0
-        while(i < reservedArea.length){
-            console.log(i)
-            if(reservedArea[i] !== temp){
-                i++;
-            }else if(reservedArea[i] === temp){
-                console.log("There is already a building there");
-                return;
-            }
-        }
-        reservedArea.push(temp);
-        console.log(reservedArea);
-        solarCount++
-        handleCounters();
-        mineResources-=20;
-        solarText.text = "Solar Panels: " + solarCount;
-        bmd.draw(solarBuild, x, y)
-    }
-}
 
 function updateTimers() {
-    mineResources+= mineCount;
-    solarResources+= solarCount / 4;
-    oreText.setText('Metal Ore: ' + mineResources);
-    energyText.setText('Energy: ' + solarResources);
+
+    for( var i = 0; i < buildings.length; ++i ) {
+        
+        resources.matter += ( buildings[i].count * buildings[i].matterMake ) / buildings[i].handicap;
+        resources.energy += ( buildings[i].count * buildings[i].energyMake ) / buildings[i].handicap;
+        matterText.setText('Matter: ' + resources.matter);
+        energyText.setText('Energy: ' + resources.energy);
+    }
 }
 
 function update() {
@@ -170,11 +213,4 @@ function update() {
     marker.y = layer.getTileY(game.input.activePointer.worldY) * 32;
     // game.world.bringToTop(mineBuild);
 
-}
-
-function handleCounters(){
-    buildingCount++
-    buildingText.text = "Total Buildings: " + buildingCount;
-    mineBool = false;
-    solarBool = false;
 }
