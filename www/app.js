@@ -4,6 +4,7 @@ var map;
 var music;
 var buttonSound;
 var placeSound;
+var errorSound;
 var layer;
 var layer2;
 var marker;
@@ -21,6 +22,10 @@ var resources = {
     energy: 0
 }
 
+var alertText;
+var bgTimer = 0;
+
+//Building Objects
 var buildings = [
     {
         name: 'solar',
@@ -60,12 +65,15 @@ function preload() {
     game.load.tilemap('planet', 'app/assets/planetSand.json', null, Phaser.Tilemap.TILED_JSON);
 
     game.load.image('tiles', 'app/assets/Bones_A.png');
-    game.load.image('footer', 'app/assets/footerbox.png');
+    game.load.image('footer', 'app/assets/footerbox2.png');
     game.load.image('header', 'app/assets/headerbox.png');
 
-    game.load.audio('ambience', 'app/assets/GalacticTemple.ogg');
+    // game.load.audio('ambience', 'app/assets/GalacticTemple.ogg');
+    game.load.audio('ambience', 'app/assets/ambient_menu.mp3');
+
     game.load.audio('clickSfx', 'app/assets/buttonclick.mp3');
     game.load.audio('placeSfx', 'app/assets/placeclick.mp3');
+    game.load.audio('errorSfx', 'app/assets/errorsound.mp3');
 
     for(var i = 0; i < buildings.length; ++i) {
         game.load.image( buildings[i].name, buildings[i].image )
@@ -75,13 +83,17 @@ function preload() {
 
 
 function create() {
+    game.renderer.renderSession.roundPixels = true;
+
     //Map tileset
     map = game.add.tilemap('planet');
     map.addTilesetImage('Bones_A', 'tiles');
 
+    //Sounds
     music = game.add.audio('ambience');
     buttonSound = game.add.audio('clickSfx');
     placeSound = game.add.audio('placeSfx');
+    errorSound = game.add.audio('errorSfx');
     music.play();
 
     //Add ground layer
@@ -97,7 +109,7 @@ function create() {
     layer2 = map.createLayer('Tile Layer 2');
 
     //UI panels
-    footerUI = game.add.sprite(176, 592, 'footer');
+    footerUI = game.add.sprite(176, 578, 'footer');
     footerUI.anchor.setTo(0.5, 0.5);
     headerUI = game.add.sprite(176, 48, 'header');
     headerUI.anchor.setTo(0.5, 0.5);
@@ -106,12 +118,15 @@ function create() {
     buildingText = game.add.text(10, 8, "Total Buildings: " + 0, {font: "10px Monaco", fill: '#32ff14' });
     matterText = game.add.text(10, 56, "Matter: " + resources.matter, {font: "10px Monaco", fill: "#32ff14" });
     energyText = game.add.text(10, 72, "Energy: " + resources.energy, {font: "10px Monaco", fill: "#32ff14" });
+    alertText = game.add.text(172, 534, '', {font: "10px Monaco", fill: '#32ff14', align: "center"});
+    alertText.anchor.set(0.5);
 
     //Add bitmapdata and bounds
     bmd = game.add.bitmapData(352, 640);
     bmd.addToWorld();
     bmd.smoothed = false;
 
+    //Loads sprites and text from buildings object
     for(var i = 0; i < buildings.length; ++i) {
         
         var t = buildings[i].text;
@@ -139,11 +154,17 @@ function listener() {
     selected = this;
     buttonSound.play();
     justBuilt = false;
+    if(buildings[selected].name == 'mine'){
+        alertText.text = "Mine: Cost 10 Matter"
+        bgTimer = 0;
+    }else if(buildings[selected].name == 'solar'){
+        alertText.text = "Solar Panel: Cost 20 Matter"
+        bgTimer = 0;
+    }
 
 }
 
 function movehandler( pointer, x, y ) {
-
     if( pointer.isDown &&
         justBuilt == false &&
         x < 256 &&
@@ -172,7 +193,10 @@ function placeBuilding(index) {
             if(reservedArea[j] !== temp){
                 j++;
             }else if(reservedArea[j] === temp){
-                console.log("There is already a building there");
+                bgTimer = 0;
+                alertText.text = "This Area is Occupied"
+                errorSound.play();
+                // console.log("There is already a building there");
                 return;
             }
         }
@@ -192,12 +216,21 @@ function placeBuilding(index) {
         justBuilt = true;
         placeSound.play();
 
+    }else{
+        bgTimer = 0;
+        alertText.text = "You Don't Have Enough Resources" 
+        errorSound.play();
     }
 
 }
 
 
 function updateTimers() {
+    bgTimer++;
+    if(bgTimer >= 3){
+            alertText.text = '';
+        }
+    // console.log(bgTimer);
 
     for( var i = 0; i < buildings.length; ++i ) {
         
