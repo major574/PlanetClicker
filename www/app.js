@@ -10,9 +10,14 @@ var layer2;
 var marker;
 var reservedArea = [];
 var buildingCount = 0;
+var matterPSCount = 0;
+var energyPSCount = 0;
 var buildingText;
+var matterPS;
+var energyPS;
 var footerUI;
 var headerUI;
+var shipPlatform;
 
 var selected = null;
 var justBuilt = true;
@@ -36,9 +41,9 @@ var buildings = [
         energyMake: 1,
         count: 0,
         handicap: 4,
-        text: { x: 10,  y: 24, text: 'Solar Panels', font: { font: '10px Monaco', fill: '#32ff14' } },
+        // text: { x: 10,  y: 24, text: 'Solar Panels', font: { font: '10px Monaco', fill: '#32ff14' } },
         textobject: undefined,
-        button: { x: 115, y: 592, image: 'app/assets/solar-button.png', spritename: 'button2', buttonref: undefined },
+        button: { x: 30, y: 616, image: 'app/assets/solar-button-small.png', spritename: 'button2', buttonref: undefined },
         build: undefined,
         listener: undefined,
         handler: undefined
@@ -52,9 +57,68 @@ var buildings = [
         energyMake: 0,
         count: 0,
         handicap: 1,
-        text: { x: 10,  y: 40, text: 'Mines', font: { font: '10px Monaco', fill: '#32ff14' } },
         textobject: undefined,
-        button: { x: 45, y: 592, image: 'app/assets/mine-button.png', spritename: 'button1', buttonref: undefined },
+        button: { x: 30, y: 572, image: 'app/assets/mine-button-small.png', spritename: 'button1', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
+    {
+        name:  'mineII',
+        image: 'app/assets/mineII.png',
+        matterCost: 100,
+        energyCost: 0,
+        matterMake: 10,
+        energyMake: 0,
+        count: 0,
+        handicap: 1,
+        textobject: undefined,
+        button: { x: 74, y: 572, image: 'app/assets/mineII-button-small.png', spritename: 'button3', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
+    {
+        name:  'mineIII',
+        image: 'app/assets/mineIII.png',
+        matterCost: 1000,
+        energyCost: 0,
+        matterMake: 100,
+        energyMake: 0,
+        count: 0,
+        handicap: 1,
+        textobject: undefined,
+        button: { x: 118, y: 572, image: 'app/assets/mineIII-button-small.png', spritename: 'button4', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
+    {
+        name: 'solar2',
+        image: 'app/assets/solarpanelII.png',
+        matterCost: 200,
+        energyCost: 0,
+        matterMake: 0,
+        energyMake: 10,
+        count: 0,
+        handicap: 4,
+        textobject: undefined,
+        button: { x: 74, y: 616, image: 'app/assets/solarII-button-small.png', spritename: 'button5', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
+    {
+        name: 'solar3',
+        image: 'app/assets/solarpanelIII.png',
+        matterCost: 2000,
+        energyCost: 0,
+        matterMake: 0,
+        energyMake: 100,
+        count: 0,
+        handicap: 4,
+        textobject: undefined,
+        button: { x: 118, y: 616, image: 'app/assets/solarIII-button-small.png', spritename: 'button6', buttonref: undefined },
         build: undefined,
         listener: undefined,
         handler: undefined
@@ -62,9 +126,11 @@ var buildings = [
 ]
 
 function preload() {
-    game.load.tilemap('planet', 'app/assets/planetSand.json', null, Phaser.Tilemap.TILED_JSON);
 
+    game.load.tilemap('planet', 'app/assets/planetSand.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles', 'app/assets/Bones_A.png');
+    game.load.image('platform', 'app/assets/shipPlatform2.png');
+    game.load.image('spaceship', 'app/assets/orion1.png');
     game.load.image('footer', 'app/assets/footerbox2.png');
     game.load.image('header', 'app/assets/headerbox.png');
 
@@ -94,7 +160,7 @@ function create() {
     buttonSound = game.add.audio('clickSfx');
     placeSound = game.add.audio('placeSfx');
     errorSound = game.add.audio('errorSfx');
-    music.play();
+    // music.play();
 
     //Add ground layer
     layer = map.createLayer('Tile Layer 1');
@@ -109,16 +175,24 @@ function create() {
     layer2 = map.createLayer('Tile Layer 2');
 
     //UI panels
+    shipPlatform = game.add.sprite(176, 480, 'platform');
+    shipPlatform.anchor.setTo(0.5, 0.5);
+    spaceShip = game.add.sprite(174, 481, 'spaceship');
+    spaceShip.anchor.setTo(0.5, 0.5);
     footerUI = game.add.sprite(176, 578, 'footer');
     footerUI.anchor.setTo(0.5, 0.5);
     headerUI = game.add.sprite(176, 48, 'header');
     headerUI.anchor.setTo(0.5, 0.5);
 
+
+
     //Text labels
     buildingText = game.add.text(10, 8, "Total Buildings: " + 0, {font: "10px Monaco", fill: '#32ff14' });
+    matterPS = game.add.text(10, 24, "MPS: " + 0, {font: "10px Monaco", fill: '#32ff14' });
+    energyPS = game.add.text(10, 40, "EPS: " + 0, {font: "10px Monaco", fill: '#32ff14' });
     matterText = game.add.text(10, 56, "Matter: " + resources.matter, {font: "10px Monaco", fill: "#32ff14" });
     energyText = game.add.text(10, 72, "Energy: " + resources.energy, {font: "10px Monaco", fill: "#32ff14" });
-    alertText = game.add.text(172, 534, '', {font: "10px Monaco", fill: '#32ff14', align: "center"});
+    alertText = game.add.text(172, 532, '', {font: "10px Monaco", fill: '#32ff14', align: "center"});
     alertText.anchor.set(0.5);
 
     //Add bitmapdata and bounds
@@ -129,10 +203,10 @@ function create() {
     //Loads sprites and text from buildings object
     for(var i = 0; i < buildings.length; ++i) {
         
-        var t = buildings[i].text;
+        // var t = buildings[i].text;
         var b = buildings[i].button;
 
-        buildings[i].textobject = game.add.text(t.x, t.y, t.text + ': ' + buildings[i].count, t.font );
+        // buildings[i].textobject = game.add.text(t.x, t.y, t.text + ': ' + buildings[i].count, t.font );
 
         b.buttonref = game.add.sprite( b.x, b.y, b.spritename );
         b.buttonref.anchor.setTo(0.5, 0.5);
@@ -154,14 +228,26 @@ function listener() {
     selected = this;
     buttonSound.play();
     justBuilt = false;
-    if(buildings[selected].name == 'mine'){
-        alertText.text = "Mine: Cost 10 Matter"
+    if(buildings[selected].name == 'solar'){
+        alertText.text = "Solar I: 20 Matter (EPS: 0.25)"
         bgTimer = 0;
-    }else if(buildings[selected].name == 'solar'){
-        alertText.text = "Solar Panel: Cost 20 Matter"
+    }else if(buildings[selected].name == 'solar2'){
+        alertText.text = "Solar II: 200 Matter (EPS: 2.5)"
+        bgTimer = 0;
+    }else if(buildings[selected].name == 'solar3'){
+        alertText.text = "Solar III: 2000 Matter (EPS: 25)"
+        bgTimer = 0;
+        console.log(this);
+    }else if(buildings[selected].name == 'mine'){
+        alertText.text = "Mine I: 10 Matter (MPS: 1)"
+        bgTimer = 0;
+    }else if(buildings[selected].name == 'mineII'){
+        alertText.text = "Mine II: 100 Matter (MPS: 10)"
+        bgTimer = 0;
+    }else if(buildings[selected].name == 'mineIII'){
+        alertText.text = "Mine III: 1000 Matter (MPS 100)"
         bgTimer = 0;
     }
-
 }
 
 function movehandler( pointer, x, y ) {
@@ -169,8 +255,10 @@ function movehandler( pointer, x, y ) {
         justBuilt == false &&
         x < 256 &&
         x > 96 &&
-        y < 528 &&
+        y < 448 &&
         y > 112 ) {
+        console.log(x);
+        console.log(y);
         placeBuilding(selected);
     }
 }
@@ -203,15 +291,18 @@ function placeBuilding(index) {
         reservedArea.push(temp);
         console.log(reservedArea);
         building.count++;
-
+        energyPSCount += (building.energyMake / 4);
+        matterPSCount += building.matterMake;
         buildingCount++;
         buildingText.text = "Total Buildings: " + buildingCount;
+        matterPS.text = "MPS: " + matterPSCount;
+        energyPS.text = "EPS: " + energyPSCount;
         building.selected = false;
 
         resources.matter -= building.matterCost;
         resources.energy -= building.energyCost;
 
-        building.textobject.text = building.text.text + ': ' + building.count;
+        // building.textobject.text = building.text.text + ': ' + building.count;
         bmd.draw(building.build, x, y);
         justBuilt = true;
         placeSound.play();
