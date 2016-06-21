@@ -1,4 +1,4 @@
-var game = new Phaser.Game(352, 640, Phaser.CANVAS, 'phaser-example', { preload: preload, create: create, update: update });
+var game = new Phaser.Game(352, 640, Phaser.CANVAS, 'TESTER', { preload: preload, create: create, update: update });
 
 var map;
 var music;
@@ -18,6 +18,10 @@ var energyPS;
 var footerUI;
 var headerUI;
 var shipPlatform;
+var pirateSprite;
+
+var RNG = 0;
+var pirateBOOL;
 
 var selected = null;
 var justBuilt = true;
@@ -30,6 +34,9 @@ var resources = {
 var alertText;
 var bgTimer = 0;
 
+
+var buildingsSprites = []
+
 //Building Objects
 var buildings = [
     {
@@ -41,7 +48,6 @@ var buildings = [
         energyMake: 1,
         count: 0,
         handicap: 4,
-        // text: { x: 10,  y: 24, text: 'Solar Panels', font: { font: '10px Monaco', fill: '#32ff14' } },
         textobject: undefined,
         button: { x: 30, y: 616, image: 'app/assets/solar-button-small.png', spritename: 'button2', buttonref: undefined },
         build: undefined,
@@ -133,6 +139,8 @@ function preload() {
     game.load.image('spaceship', 'app/assets/orion1.png');
     game.load.image('footer', 'app/assets/footerbox2.png');
     game.load.image('header', 'app/assets/headerbox.png');
+    game.load.spritesheet('pirate', 'app/assets/pirate1.png', 32, 32, 4);
+    game.load.spritesheet('kaboom', 'app/assets/explode.png', 128, 128);
 
     // game.load.audio('ambience', 'app/assets/GalacticTemple.ogg');
     game.load.audio('ambience', 'app/assets/ambient_menu.mp3');
@@ -174,6 +182,17 @@ function create() {
     //Add unhighlightable layer
     layer2 = map.createLayer('Tile Layer 2');
 
+    //-------------------------------
+    // pirateSprite = game.add.sprite(112, 0, 'pirate');
+
+    pirateSprite = game.add.sprite(112, 0, 'pirate');
+    pirateSprite.anchor.setTo(0.5, 0.5);
+    pirateSprite.animations.add('walk');
+    pirateSprite.animations.play('walk', 6, true);
+    game.add.tween(pirateSprite).to({ y: game.height }, 30000, Phaser.Easing.Linear.None, true);
+    pirateBOOL = true;
+    
+
     //UI panels
     shipPlatform = game.add.sprite(176, 480, 'platform');
     shipPlatform.anchor.setTo(0.5, 0.5);
@@ -183,7 +202,6 @@ function create() {
     footerUI.anchor.setTo(0.5, 0.5);
     headerUI = game.add.sprite(176, 48, 'header');
     headerUI.anchor.setTo(0.5, 0.5);
-
 
 
     //Text labels
@@ -237,7 +255,6 @@ function listener() {
     }else if(buildings[selected].name == 'solar3'){
         alertText.text = "Solar III: 2000 Matter (EPS: 25)"
         bgTimer = 0;
-        console.log(this);
     }else if(buildings[selected].name == 'mine'){
         alertText.text = "Mine I: 10 Matter (MPS: 1)"
         bgTimer = 0;
@@ -257,25 +274,20 @@ function movehandler( pointer, x, y ) {
         x > 96 &&
         y < 448 &&
         y > 112 ) {
-        console.log(x);
-        console.log(y);
+        // console.log(x);
+        // console.log(y);
         placeBuilding(selected);
     }
 }
 
 function placeBuilding(index) {
     var building = buildings[index];
-
     if( resources.matter >= building.matterCost &&
         resources.energy >= building.energyCost ) {
-
-        var y = marker.y + 16;
-        var x = marker.x + 16;
-
-        console.log(x, y);
+        var y = marker.y + 32;
+        var x = marker.x + 32;
         var temp = "" + x + y;
         var j = 0;
-
         while(j < reservedArea.length){
             console.log(j)
             if(reservedArea[j] !== temp){
@@ -284,7 +296,6 @@ function placeBuilding(index) {
                 bgTimer = 0;
                 alertText.text = "This Area is Occupied"
                 errorSound.play();
-                // console.log("There is already a building there");
                 return;
             }
         }
@@ -302,8 +313,9 @@ function placeBuilding(index) {
         resources.matter -= building.matterCost;
         resources.energy -= building.energyCost;
 
-        // building.textobject.text = building.text.text + ': ' + building.count;
-        bmd.draw(building.build, x, y);
+        buildingsSprites.push(game.add.sprite(marker.x, marker.y, building.name));
+        // console.log(buildingsSprites[0].key);
+
         justBuilt = true;
         placeSound.play();
 
@@ -317,14 +329,15 @@ function placeBuilding(index) {
 
 
 function updateTimers() {
+    
     bgTimer++;
+    RNG = Math.floor((Math.random() * 16) + 1)
+    pirateCollision();
+    console.log(RNG);
     if(bgTimer >= 3){
-            alertText.text = '';
-        }
-    // console.log(bgTimer);
-
+        alertText.text = '';
+    }
     for( var i = 0; i < buildings.length; ++i ) {
-        
         resources.matter += ( buildings[i].count * buildings[i].matterMake ) / buildings[i].handicap;
         resources.energy += ( buildings[i].count * buildings[i].energyMake ) / buildings[i].handicap;
         matterText.setText('Matter: ' + resources.matter);
@@ -332,9 +345,39 @@ function updateTimers() {
     }
 }
 
+
+//Pirate Collision work in progress.
+function pirateCollision() {
+    var px = Math.floor(pirateSprite.x + 16)
+    var i = 0;
+    while(i < reservedArea.length){ 
+        var resy = reservedArea[i].slice(3,6);
+        var resx = reservedArea[i].slice(0,3);
+        if((pirateSprite.y + 32) > resy && px == resx && buildingsSprites[i].key == 'mine'){
+            buildings[1].count--;
+            matterPSCount--;
+            buildingCount--;
+            pirateSprite.y = 0;
+            buildingsSprites[i].destroy();
+            pirateSprite.destroy();
+
+            reservedArea[i] = '';
+            buildingText.text = "Total Buildings: " + buildingCount;
+            matterPS.text = "MPS: " + matterPSCount;
+            // console.log(buildings[1].count);
+            break;
+        }
+        i++;
+    }
+    if(pirateSprite.y > 420){
+        pirateSprite.y = 0;
+        pirateSprite.destroy();
+    }
+
+}
+
 function update() {
     marker.x = layer.getTileX(game.input.activePointer.worldX) * 32;
     marker.y = layer.getTileY(game.input.activePointer.worldY) * 32;
-    // game.world.bringToTop(mineBuild);
-
+    // game.world.bringToTop(mineBuild);    
 }
