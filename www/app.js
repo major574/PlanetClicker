@@ -18,6 +18,8 @@ var headerUI;
 var shipPlatform;
 
 var pirates;
+var bullets
+var bulletSound;
 
 var pirateInterval = 30000;
 var pirateDecayRate = 500;
@@ -37,6 +39,8 @@ var bgTimer = 0;
 var globalClock = 0;
 
 var explosionEmitter = null;
+var armed = false;
+var gunArea = [];
 
 //Building Objects
 var buildings = [
@@ -130,6 +134,21 @@ var buildings = [
         listener: undefined,
         handler: undefined
     },
+    {
+        name: 'gun',
+        image: 'app/assets/gun1.png',
+        matterCost: 10,
+        energyCost: 0,
+        matterMake: 0,
+        energyMake: 0,
+        count: 0,
+        handicap: 1,
+        textobject: undefined,
+        button: { x: 320, y: 616, image: 'app/assets/gun-button-small.png', spritename: 'button7', buttonref: undefined },
+        build: undefined,
+        listener: undefined,
+        handler: undefined
+    },
 ]
 
 buildingsObject = {};
@@ -149,14 +168,16 @@ function preload() {
     game.load.image('spaceship', 'app/assets/orion1.png');
     game.load.image('footer', 'app/assets/footerbox.png');
     game.load.image('header', 'app/assets/headerbox.png');
+    game.load.image('bullet', 'app/assets/bullet.png');
     game.load.spritesheet('pirate', 'app/assets/pirate.png', 32, 32, 5);
     game.load.spritesheet('kaboom', 'app/assets/explode2.png', 32, 32);
     // game.load.audio('ambience', 'app/assets/GalacticTemple.ogg');
-    game.load.audio('ambience', 'app/assets/ambient_menu.mp3');
+    game.load.audio('ambience', 'app/assets/Ambience_BlackHole_00.mp3');
     game.load.audio('clickSfx', 'app/assets/buttonclick.mp3');
     game.load.audio('placeSfx', 'app/assets/placeclick.mp3');
     game.load.audio('errorSfx', 'app/assets/errorsound.mp3');
     game.load.audio('exploSfx', 'app/assets/explosound.mp3');
+    game.load.audio('bulletSfx', 'app/assets/Laser_00.mp3');
     for(var i = 0; i < buildings.length; ++i) {
         game.load.image( buildings[i].name, buildings[i].image )
         game.load.image( buildings[i].button.spritename, buildings[i].button.image )
@@ -168,7 +189,7 @@ function preload() {
 
 function create() {
     game.renderer.renderSession.roundPixels = true;
-    game.stage.disableVisibilityChange = true;
+    // game.stage.disableVisibilityChange = true;
 
     game.physics.startSystem(Phaser.Physics.ARCADE);
 
@@ -182,7 +203,9 @@ function create() {
     placeSound = game.add.audio('placeSfx');
     errorSound = game.add.audio('errorSfx');
     exploSound = game.add.audio('exploSfx');
-    // music.play();
+    bulletSound = game.add.audio('bulletSfx');
+    music.play();
+    music.loopFull();
 
     //Add ground layer
     layer = map.createLayer('Tile Layer 1');
@@ -200,11 +223,23 @@ function create() {
     pirates.physicsBodyType = Phaser.Physics.ARCADE;
     pirates.enableBody = true;
 
+    explosionEmitter = game.add.emitter(0,0, 200);
+    explosionEmitter.makeParticles('kaboom', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    explosionEmitter.gravity = -300;
+    
+
     buildingUnits = game.add.group();
     buildingUnits.physicsBodyType = Phaser.Physics.ARCADE;
     buildingUnits.enableBody = true;
+    buildingUnits.inputEnabled = true;
+
+    bullets = game.add.group();
+    bullets.physicsBodyType = Phaser.Physics.ARCADE;
+    bullets.enableBody = true;
+    // buildingUnits.events.onInputDown.add(clickGun, this);
 
     emitPirates();
+
 
     //UI panels
     shipPlatform = game.add.sprite(176, 480, 'platform');
@@ -246,12 +281,12 @@ function create() {
 
         b.buttonref.events.onInputDown.add( listener, i );
     }
+    // console.log(buildingsObject.gun)
+    
 
-    explosionEmitter = game.add.emitter(0,0, 200);
-    explosionEmitter.makeParticles('kaboom', [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    explosionEmitter.gravity = -300;
 
     game.input.addMoveCallback(movehandler, this);
+    // game.input.addMoveCallback(clickGun, buildingsObject.name);
 
     //Game clock
     game.time.events.loop(Phaser.Timer.SECOND, updateTimers, this);
@@ -281,6 +316,9 @@ function listener() {
     }else if(buildings[selected].name == 'mineIII'){
         alertText.text = "Mine III: 1000 Matter (MPS 100)"
         bgTimer = 0;
+    }else if(buildings[selected].name == 'gun'){
+        alertText.text = "Gun: 10 Matter (Click To Shoot)"
+        bgTimer = 0;
     }
 }
 
@@ -294,6 +332,49 @@ function movehandler( pointer, x, y ) {
         // console.log(x);
         // console.log(y);
         placeBuilding(selected);
+    }
+    if(justBuilt == true && pointer.isDown){
+        var y = marker.y + 16;
+        var x = marker.x + 16;
+        var temp = "" + x + y;
+        var j = 0;
+
+        while(j < gunArea.length){
+            if(gunArea[j] == temp){
+                console.log(temp)
+                // errorSound.play();
+                emitBullets();
+                bulletSound.play();
+                j++
+            }else{
+                j++;
+            }
+        }
+        console.log(x);
+        console.log(y);
+    }
+}
+
+function emitBullets() {
+    var thisBullet = bullets.create(marker.x + 13, marker.y - 12, 'bullet');
+    thisBullet.animations.add('fire');
+    thisBullet.animations.play('fire', 1, true);
+    thisBullet.body.velocity.y = -800;
+    return thisBullet;
+    
+}
+
+function addRandomPirate() {
+    while(globalClock >= 0){
+        var i = Math.floor( Math.random() * 5 );
+        var thisPirate = pirates.create(96 + ( 32 * i ), 0, 'pirate');
+
+        thisPirate.animations.add('walk');
+        thisPirate.animations.play('walk', 8, true);
+
+        game.physics.enable(thisPirate, Phaser.Physics.ARCADE);
+        thisPirate.body.velocity.y = 12;
+        return thisPirate;
     }
 }
 
@@ -318,11 +399,14 @@ function placeBuilding(index) {
         var y = marker.y + 16;
         var x = marker.x + 16;
 
+        var temp = "" + x + y;
+
         collisions = 0;
 
         buildingUnits.forEachAlive(checkOverlap, this, { x: x, y: y, width: 10, height: 10 });
 
         if(collisions === 0) {
+
             building.count++;
             building.selected = false;
 
@@ -333,6 +417,11 @@ function placeBuilding(index) {
 
             thisbuilding.templateName = building.name;
 
+            if(thisbuilding.templateName == 'gun'){
+                gunArea.push(temp)
+                console.log(gunArea);
+            }
+
             justBuilt = true;
             placeSound.play();
         }
@@ -341,6 +430,7 @@ function placeBuilding(index) {
     } else {
         bgTimer = 0;
         alertText.text = "You Don't Have Enough Resources"
+        justBuilt = true;
         errorSound.play();
     }
 }
@@ -386,13 +476,14 @@ function cleanupBuilding(building) {
 function cleanupPirates(pirate) {
     explosionEmitter.x = pirate.x + pirate.width / 2;
     explosionEmitter.y = pirate.y + pirate.height / 2;
-    // explosionEmitter.start(true, 300, null, 40);
-    // pirate.destroy();
+    explosionEmitter.start(true, 300, null, 40);
+    pirate.destroy();
+    exploSound.play();
 }
 
 function updateTimers() {
     globalClock++;
-    console.log(globalClock);
+    // console.log(globalClock);
     bgTimer++;
     if(bgTimer >= 3){
         alertText.text = '';
@@ -416,6 +507,13 @@ function shipCollisionHandler(thing1, thing2) {
     // thing2.kill();
 }
 
+function bulletCollisionHandler(thing1, thing2) {
+    thing1.kill();
+    thing2.kill();
+}
+
+
+
 function update() {
     marker.x = layer.getTileX(game.input.activePointer.worldX) * 32;
     marker.y = layer.getTileY(game.input.activePointer.worldY) * 32;
@@ -434,6 +532,7 @@ function update() {
 
     game.physics.arcade.overlap(buildingUnits, pirates, collisionHandler, null, this);
     game.physics.arcade.overlap(shipPlatform, pirates, shipCollisionHandler, null, this);
+    game.physics.arcade.overlap(bullets, pirates, bulletCollisionHandler, null, this);
 
     buildingUnits.forEachDead(cleanupBuilding);
     pirates.forEachDead(cleanupPirates);
