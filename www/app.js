@@ -5,8 +5,10 @@ var music;
 var ambience;
 var buttonSound;
 var placeSound;
+var shipBuildSound;
 var errorSound;
 var exploSound;
+var winSound;
 var layer;
 var layer2;
 var marker;
@@ -17,6 +19,7 @@ var energyPS;
 var footerUI;
 var headerUI;
 var shipPlatform;
+var shipBuilder;
 
 var pirates;
 var bullets
@@ -24,11 +27,12 @@ var drones;
 var bulletSound;
 
 var pirateInterval = 30000;
-var pirateDecayRate = 500;
-var pirateMinInterval = 5000;
+var pirateDecayRate = 2000;
+var pirateMinInterval = 2000;
 
 var droneInterval = 8000;
-
+var completion = 0;
+var stateText;
 
 var selected = null;
 var justBuilt = true;
@@ -36,7 +40,8 @@ var justBuilt = true;
 var resources = {
     matter: 10,
     energy: 0
-}
+};
+
 var collisions = 0;
 
 var alertText;
@@ -86,7 +91,7 @@ var buildings = [
     },
     {
         name:  'mine',
-        image: 'app/assets/mine.png',
+        image: 'app/assets/mine1.png',
         matterCost: 10,
         energyCost: 0,
         matterMake: 1,
@@ -94,14 +99,14 @@ var buildings = [
         count: 0,
         handicap: 1,
         textobject: undefined,
-        button: { x: 30, y: 572, image: 'app/assets/mine-button-small.png', spritename: 'button1', buttonref: undefined },
+        button: { x: 30, y: 572, image: 'app/assets/mine1-button-small.png', spritename: 'button1', buttonref: undefined },
         build: undefined,
         listener: undefined,
         handler: undefined
     },
     {
         name:  'mineII',
-        image: 'app/assets/mineII.png',
+        image: 'app/assets/mine2.png',
         matterCost: 100,
         energyCost: 0,
         matterMake: 10,
@@ -109,14 +114,14 @@ var buildings = [
         count: 0,
         handicap: 1,
         textobject: undefined,
-        button: { x: 74, y: 572, image: 'app/assets/mineII-button-small.png', spritename: 'button3', buttonref: undefined },
+        button: { x: 74, y: 572, image: 'app/assets/mine2-button-small.png', spritename: 'button3', buttonref: undefined },
         build: undefined,
         listener: undefined,
         handler: undefined
     },
     {
         name:  'mineIII',
-        image: 'app/assets/mineIII.png',
+        image: 'app/assets/mine3.png',
         matterCost: 1000,
         energyCost: 0,
         matterMake: 100,
@@ -124,7 +129,7 @@ var buildings = [
         count: 0,
         handicap: 1,
         textobject: undefined,
-        button: { x: 118, y: 572, image: 'app/assets/mineIII-button-small.png', spritename: 'button4', buttonref: undefined },
+        button: { x: 118, y: 572, image: 'app/assets/mine3-button-small.png', spritename: 'button4', buttonref: undefined },
         build: undefined,
         listener: undefined,
         handler: undefined
@@ -236,18 +241,31 @@ function preload() {
     game.load.tilemap('planet', 'app/assets/planetSand.json', null, Phaser.Tilemap.TILED_JSON);
     game.load.image('tiles', 'app/assets/Bones_A.png');
     game.load.image('platform', 'app/assets/shipPlatform.png');
-    game.load.image('spaceship', 'app/assets/orion1.png');
+    game.load.image('spaceship0', 'app/assets/orion0.png');
+    game.load.image('spaceship20', 'app/assets/orion20.png');
+    game.load.image('spaceship40', 'app/assets/orion40.png');
+    game.load.image('spaceship60', 'app/assets/orion60.png');
+    game.load.image('spaceship80', 'app/assets/orion80.png');
+    game.load.image('spaceship100', 'app/assets/orion100.png');
     game.load.image('footer', 'app/assets/footerbox.png');
     game.load.image('header', 'app/assets/headerbox.png');
     game.load.image('bullet', 'app/assets/bullet.png');
     game.load.image('drone', 'app/assets/drone.png');
+    game.load.image('shipbuild', 'app/assets/shipbutton0.png');
+    game.load.image('shipbuild20', 'app/assets/shipbutton20.png');
+    game.load.image('shipbuild40', 'app/assets/shipbutton40.png');
+    game.load.image('shipbuild60', 'app/assets/shipbutton60.png');
+    game.load.image('shipbuild80', 'app/assets/shipbutton80.png');
+    game.load.image('shipbuild100', 'app/assets/shipbutton100.png');
     game.load.spritesheet('pirate', 'app/assets/pirate.png', 32, 32, 5);
     game.load.spritesheet('kaboom', 'app/assets/explode2.png', 32, 32);
     game.load.audio('music', 'app/assets/ambient_menu.mp3');
     game.load.audio('ambience', 'app/assets/Ambience_BlackHole_00.mp3');
     game.load.audio('clickSfx', 'app/assets/buttonclick.mp3');
     game.load.audio('placeSfx', 'app/assets/placeclick.mp3');
+    game.load.audio('shipbuildSfx', 'app/assets/buildheavy.mp3');
     game.load.audio('errorSfx', 'app/assets/errorsound.mp3');
+    game.load.audio('winSfx', 'app/assets/win.mp3');
     game.load.audio('exploSfx', 'app/assets/explosound.mp3');
     game.load.audio('bulletSfx', 'app/assets/Laser_00.mp3');
     for(var i = 0; i < buildings.length; ++i) {
@@ -274,11 +292,13 @@ function create() {
     music = game.add.audio('music');
     buttonSound = game.add.audio('clickSfx');
     placeSound = game.add.audio('placeSfx');
+    shipBuildSound = game.add.audio('shipbuildSfx');
     errorSound = game.add.audio('errorSfx');
     exploSound = game.add.audio('exploSfx');
     bulletSound = game.add.audio('bulletSfx');
+    winSound = game.add.audio('winSfx');
     ambience.play();
-    music.play();
+    // music.play();
     ambience.loopFull();
 
     //Add ground layer
@@ -330,12 +350,24 @@ function create() {
     shipPlatform.anchor.setTo(0.5, 0.5);
     game.physics.enable(shipPlatform, Phaser.Physics.ARCADE);
 
-    spaceShip = game.add.sprite(174, 481, 'spaceship');
-    spaceShip.anchor.setTo(0.5, 0.5);
+    spaceShip = game.add.sprite(94, 445, 'spaceship0');
+    // spaceShip.anchor.setTo(0.5, 0.5);
+
+    
+
     footerUI = game.add.sprite(176, 578, 'footer');
     footerUI.anchor.setTo(0.5, 0.5);
+
+    shipBuilder = game.add.sprite(213, 551, 'shipbuild');
+    // shipBuilder.anchor.setTo(0.5, 0.5);
+    shipBuilder.inputEnabled = true;
+    shipBuilder.events.onInputDown.add(shipListener, this);
+
+
     headerUI = game.add.sprite(176, 48, 'header');
     headerUI.anchor.setTo(0.5, 0.5);
+
+    stateText = game.add.text(80,250,' ', { font: '44px Monaco', fill: '#fff' });
 
 
     //Text labels
@@ -372,6 +404,80 @@ function create() {
     game.time.events.loop(Phaser.Timer.SECOND, updateTimers, this);
 }
 
+function shipListener(){
+    if(resources.matter >= 50000 && resources.energy >= 12500 && completion == 0){
+        alertText.text = "Ship 20% Complete";
+        bgTimer = 0;
+        resources.matter -= 50000;
+        resources.energy -= 12500;
+        completion = 20;
+        spaceShip.kill();
+        spaceShip = game.add.sprite(94, 445, 'spaceship20');
+        shipBuilder = game.add.sprite(213, 551, 'shipbuild20');
+        shipBuildSound.play();
+    }else if(resources.matter >= 50000 && resources.energy >= 12500 && completion == 20){
+        alertText.text = "Ship 40% Complete";
+        bgTimer = 0;
+        resources.matter -= 50000;
+        resources.energy -= 12500;
+        completion = 40;
+        spaceShip.kill();
+        spaceShip = game.add.sprite(94, 445, 'spaceship40');
+        shipBuilder = game.add.sprite(213, 551, 'shipbuild40');
+        shipBuildSound.play();
+    }else if(resources.matter >= 50000 && resources.energy >= 12500 && completion == 40){
+        alertText.text = "Ship 60% Complete";
+        bgTimer = 0;
+        resources.matter -= 50000;
+        resources.energy -= 12500;
+        completion = 60;
+        spaceShip.kill();
+        spaceShip = game.add.sprite(94, 445, 'spaceship60');
+        shipBuilder = game.add.sprite(213, 551, 'shipbuild60');
+        shipBuildSound.play();
+    }else if(resources.matter >= 50000 && resources.energy >= 12500 && completion == 60){
+        alertText.text = "Ship 80% Complete";
+        bgTimer = 0;
+        resources.matter -= 50000;
+        resources.energy -= 12500;
+        completion = 80;
+        spaceShip.kill();
+        spaceShip = game.add.sprite(94, 445, 'spaceship80');
+        shipBuilder = game.add.sprite(213, 551, 'shipbuild80');
+        shipBuildSound.play();
+    }else if(resources.matter >= 50000 && resources.energy >= 12500 && completion == 80){
+        alertText.text = "Ship 100% Complete";
+        bgTimer = 0;
+        resources.matter -= 50000;
+        resources.energy -= 12500;
+        completion = 100;
+        spaceShip.kill();
+        spaceShip = game.add.sprite(94, 445, 'spaceship100');
+        shipBuilder = game.add.sprite(213, 551, 'shipbuild100');
+        shipBuildSound.play();
+        gameOverWin();
+    }else{
+        alertText.text = "Build Ship: 50k M 12.5k E (20%)";
+        bgTimer = 0;
+        buttonSound.play();
+    }
+    
+}
+
+function gameOverWin() {
+    game.physics.arcade.isPaused = true;
+    ambience.stop();
+    stateText.text = "YOU WIN";
+    winSound.play();
+    ambience.stop();
+}
+
+function gameOverLose() {
+    game.physics.arcade.isPaused = true;
+    stateText.text = "YOU LOSE";
+    // ambience.stop();
+    // winSound.play();
+}
 
 
 function listener() {
@@ -480,35 +586,35 @@ function emitDrone1() {
     var thisDrone = drones.create(droneAreaX1 - 16, droneAreaY1 - 18, 'drone');
     thisDrone.animations.add('fly');
     thisDrone.animations.play('fly', 1, true);
-    thisDrone.body.velocity.y = -60;
+    thisDrone.body.velocity.y = -50;
     window.setTimeout( emitDrone1, droneInterval );  
 }
 function emitDrone2() {
     var thisDrone = drones.create(droneAreaX2 - 16, droneAreaY2 - 18, 'drone');
     thisDrone.animations.add('fly');
     thisDrone.animations.play('fly', 1, true);
-    thisDrone.body.velocity.y = -60;
+    thisDrone.body.velocity.y = -50;
     window.setTimeout( emitDrone2, droneInterval );   
 }
 function emitDrone3() {
     var thisDrone = drones.create(droneAreaX3 - 16, droneAreaY3 - 18, 'drone');
     thisDrone.animations.add('fly');
     thisDrone.animations.play('fly', 1, true);
-    thisDrone.body.velocity.y = -60;  
+    thisDrone.body.velocity.y = -50;  
     window.setTimeout( emitDrone3, droneInterval );
 }
 function emitDrone4() {
     var thisDrone = drones.create(droneAreaX4 - 16, droneAreaY4 - 18, 'drone');
     thisDrone.animations.add('fly');
     thisDrone.animations.play('fly', 1, true);
-    thisDrone.body.velocity.y = -60; 
+    thisDrone.body.velocity.y = -50; 
     window.setTimeout( emitDrone4, droneInterval );  
 }
 function emitDrone5() {
     var thisDrone = drones.create(droneAreaX5 - 16, droneAreaY5 - 18, 'drone');
     thisDrone.animations.add('fly');
     thisDrone.animations.play('fly', 1, true);
-    thisDrone.body.velocity.y = -60; 
+    thisDrone.body.velocity.y = -50; 
     window.setTimeout( emitDrone5, droneInterval ); 
 }
 
@@ -563,6 +669,7 @@ function checkOverlap(sprite, rect) {
     if( intersects && destructActivated == false) {
         collisions += 1;
         alertText.text = "Area Occupied"
+        justBuilt = true;
         errorSound.play();
     }else if( intersects && destructActivated == true){
         collisions += 1;
@@ -643,13 +750,13 @@ function placeBuilding(index) {
 function addRandomPirate() {
     while(globalClock >= 20){
         var i = Math.floor( Math.random() * 5 );
-        var thisPirate = pirates.create(96 + ( 32 * i ), 0, 'pirate');
+        var thisPirate = pirates.create(96 + ( 32 * i ), 60, 'pirate');
 
         thisPirate.animations.add('walk');
-        thisPirate.animations.play('walk', 8, true);
+        thisPirate.animations.play('walk', 10, true);
 
         game.physics.enable(thisPirate, Phaser.Physics.ARCADE);
-        thisPirate.body.velocity.y = 14;
+        thisPirate.body.velocity.y = 15;
         return thisPirate;
     }
 }
@@ -710,8 +817,8 @@ function collisionHandler(thing1, thing2) {
 
 function shipCollisionHandler(thing1, thing2) {
     thing2.kill();
+    gameOverLose();
 }
-
 
 function bulletCollisionHandler(thing1, thing2) {
     thing1.kill();
